@@ -1,0 +1,182 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/12/Math.jack
+
+/**
+ * A library of commonly used mathematical functions.
+ * Note: Jack compilers implement multiplication and division using OS method calls.
+ */
+class Math {
+    static Array bitArray; 
+
+    /** Initializes the library. */
+    function void init() {
+        let bitArray = Array.new(16);
+        let bitArray[0] = 1;
+        let bitArray[1] = 2;
+        let bitArray[2] = 4;
+        let bitArray[3] = 8;
+        let bitArray[4] = 16;
+        let bitArray[5] = 32;
+        let bitArray[6] = 64;
+        let bitArray[7] = 128;
+        let bitArray[8] = 256;
+        let bitArray[9] = 512;
+        let bitArray[10] = 1024;
+        let bitArray[11] = 2048;
+        let bitArray[12] = 4096;
+        let bitArray[13] = 8192;
+        let bitArray[14] = 16384;
+        let bitArray[15] = 16384 + 16384;
+        return;
+    }
+
+    /** Returns the absolute value of x. */
+    function int abs(int x) {
+        if(x < 0) {
+            return -x;
+        } else {
+            return x;
+        }
+    }
+
+    /** Returns the product of x and y. 
+     *  When a Jack compiler detects the multiplication operator '*' in the 
+     *  program's code, it handles it by invoking this method. In other words,
+     *  the Jack expressions x*y and multiply(x,y) return the same value.
+     */
+    function int multiply(int x, int y) {
+        var int sum, index, mask;
+
+        let mask = 1;
+        while (index < 16) {
+            if (y & mask) {
+                let sum = sum + x;
+            }
+            let x = x + x;
+            let index = index + 1;
+            let mask = mask + mask;
+        }
+
+        return sum;
+    }
+
+    function void break() {
+        return;
+    }
+
+    /** Returns the integer part of x/y.
+     *  When a Jack compiler detects the multiplication operator '/' in the 
+     *  program's code, it handles it by invoking this method. In other words,
+     *  the Jack expressions x/y and divide(x,y) return the same value.
+     */
+    function int divide(int x, int y) {
+        var int q;
+
+        if(y = 0) {
+            return 0; //system error
+        }
+
+        if(Math.abs(y) > Math.abs(x)) {
+            return 0;
+        }
+
+        let q = Math.divide(Math.abs(x), Math.abs(y) * 2);
+
+        if((Math.abs(x) - (2 * q * Math.abs(y))) < Math.abs(y)) {
+            if((x < 0) = (y < 0)) {
+                return 2 * q;
+            } else {
+                return -(2 * q);
+            }
+        } else {
+            if((x < 0) = (y < 0)) {
+                return 2 * q + 1;
+            } else {
+                return -(2 * q + 1);
+            }
+        }
+    }
+
+    /** Returns the integer part of the square root of x. */
+    function int sqrt(int x) {
+        var int y, j, i, twoSquareJ;
+
+        let y = 0;
+        let j = 16/2-1;
+
+        while(j > -1) {
+            let i = j;
+            let twoSquareJ = 1;
+            while(i > 0) {
+                let twoSquareJ = twoSquareJ * 2;
+                let i = i - 1;
+            }
+
+            if(~(((y + twoSquareJ) * (y + twoSquareJ)) > x)) {
+                if(((y + twoSquareJ) * (y + twoSquareJ)) > 0) {
+                    let y = y + twoSquareJ;
+                }
+            }
+            let j = j - 1;
+        }
+
+        return y;
+    }
+
+    /** Returns the greater number. */
+    function int max(int a, int b) {
+        if(a > b) {
+            return a;
+        }
+        return b;
+    }
+
+    /** Returns the smaller number. */
+    function int min(int a, int b) {
+        if(a > b) {
+            return b;
+        }
+        return a;
+    }
+
+    function int bit(int x, int j) {
+        var int decimal, i, result;
+
+        let decimal = x;
+        let i = 0;
+        while(decimal > 0) {
+            let result = 0;
+            while(decimal > 1) {
+                let decimal = decimal - 2;
+                let result = result + 1;
+            }
+            do Math.break();
+            let bitArray[i] = decimal;   
+            let decimal = result;
+            let i = i + 1;
+        }
+
+        return bitArray[j];
+    }
+
+    function void createBitArray(int x) {
+        var int decimal, i, result;
+
+        let decimal = x;
+        let i = 0;
+        while(decimal > 0) {
+            let result = 0;
+            while(decimal > 1) {
+                let decimal = decimal - 2;
+                let result = result + 1;
+            }       
+            let bitArray[i] = decimal;   
+            let decimal = result;
+            let i = i + 1;
+        }
+
+        return;
+    }
+}

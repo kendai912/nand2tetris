@@ -1,0 +1,165 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/11/Pong/PongGame.jack
+
+/**
+ * Represents a Pong game.
+ */
+class PongGame {
+
+    static PongGame instance; // the singelton, a Pong game instance     
+    field Bat bat1;            // the bat
+    field Bat bat2;            // the bat
+    field Ball ball;          // the ball
+    field int wall;           // the current wall that the ball is bouncing off of.
+    field boolean exit;       // true when the game is over
+    field int score;          // the current score.
+    field int lastWall;       // the last wall that the ball bounced off of.
+
+    // The current width of the bat
+    field int batWidth;
+
+    /** Constructs a new Pong game. */
+    constructor PongGame new() {
+	    do Screen.clearScreen();
+        let batWidth = 50;  // initial bat size
+        let bat1 = Bat.new(230, 229, batWidth, 7);
+        let bat2 = Bat.new(230, 5, batWidth, 7);
+        let ball = Ball.new(253, 222, 0, 511, 0, 229);
+        do ball.setDestination(400,0);
+        do Screen.drawRectangle(0, 238, 511, 240);
+	    do Output.moveCursor(22,0);
+	    do Output.printString("Score: 0");
+	
+	    let exit = false;
+	    let score = 0;
+	    let wall = 0;
+	    let lastWall = 0;
+
+        return this;
+    }
+
+    /** Deallocates the object's memory. */
+    method void dispose() {
+        do bat1.dispose();
+        do bat2.dispose();
+	    do ball.dispose();
+        do Memory.deAlloc(this);
+        return;
+    }
+
+    /** Creates an instance of Pong game, and stores it. */
+    function void newInstance() {
+        let instance = PongGame.new();
+        return;
+    }
+    
+    /** Returns the single instance of this Pong game. */
+    function PongGame getInstance() {
+        return instance;
+    }
+
+    /** Starts the game, and andles inputs from the user that control
+     *  the bat's movement direction. */
+    method void run() {
+        var char key;
+
+        while (~exit) {
+            // waits for a key to be pressed.
+            while ((key = 0) & (~exit)) {
+                let key = Keyboard.keyPressed();
+                do bat1.move();
+                do bat2.move();
+                do moveBall();
+                do Sys.wait(50);
+            }
+
+            if (key = 130) { do bat1.setDirection(1); }
+	        else {
+	            if (key = 132) { do bat1.setDirection(2); }
+		        else {
+                    if (key = 140) { let exit = true; }
+		        }
+            }
+
+            if (key = 131) { do bat2.setDirection(1); }
+	        else {
+	            if (key = 133) { do bat2.setDirection(2); }
+		        else {
+                    if (key = 140) { let exit = true; }
+		        }
+            }
+
+            // Waits for the key to be released.
+            while ((~(key = 0)) & (~exit)) {
+                let key = Keyboard.keyPressed();
+                do bat1.move();
+                do bat2.move();
+                do moveBall();
+                do Sys.wait(50);
+            }
+        }
+
+	    if (exit) {
+            do Output.moveCursor(10,27);
+	        do Output.printString("Game Over");
+	    }
+            
+        return;
+    }
+
+    /**
+     * Handles ball movement, including bouncing.
+     * If the ball bounces off a wall, finds its new direction.
+     * If the ball bounces off the bat, increases the score by one
+     * and shrinks the bat's size, to make the game more challenging. 
+     */
+    method void moveBall() {
+        var int bouncingDirection, batLeft1, batRight1, batLeft2, batRight2, ballLeft, ballRight;
+
+        let wall = ball.move();
+
+        if ((wall > 0) & (~(wall = lastWall))) {
+            let lastWall = wall;
+            let bouncingDirection = 0;
+            let batLeft1 = bat1.getLeft();
+            let batRight1 = bat1.getRight();
+            let batLeft2 = bat2.getLeft();
+            let batRight2 = bat2.getRight();
+            let ballLeft = ball.getLeft();
+            let ballRight = ball.getRight();
+  
+            if (wall = 4) {
+                let exit = (batLeft1 > ballRight) | (batRight1 < ballLeft);
+                if (~exit) {
+                    if (ballRight < (batLeft1 + 10)) { let bouncingDirection = -1; }
+                    else {
+                        if (ballLeft > (batRight1 - 10)) { let bouncingDirection = 1; }
+                    }
+
+                    let batWidth = batWidth - 2;
+                    do bat1.setWidth(batWidth);      
+                    let score = score + 1;
+                    do Output.moveCursor(22,7);
+                    do Output.printInt(score);
+                }
+            }
+  
+            if (wall = 3) {
+                let exit = (batLeft2 > ballRight) | (batRight2 < ballLeft);
+                if (~exit) {
+                    if (ballRight < (batLeft2 + 10)) { let bouncingDirection = -1; }
+                    else {
+                        if (ballLeft > (batRight2 - 10)) { let bouncingDirection = 1; }
+                    }
+
+                    let batWidth = batWidth - 2;
+                    do bat2.setWidth(batWidth);      
+                }
+            }
+            do ball.bounce(bouncingDirection);
+        }
+        return;
+    }
+}
