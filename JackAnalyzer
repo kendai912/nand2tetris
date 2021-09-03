@@ -1,0 +1,859 @@
+#!/usr/bin/env php
+<?php
+include('/Users/Kendai/CustomCommands/SymbolTable');
+
+class JackTokenizer
+{
+    public $tokens = [];
+    public $index = 0;
+    public $currentToken = "";
+
+    public function __construct($inputFilename)
+    {
+        global $fileOrDirName;
+
+        //読み込みファイルを開き各行を配列に格納（'r'は読み込みモードで開く）
+        file_exists($inputFilename) && ($lines = file($inputFilename)) || die("読み込みに失敗\n");
+
+        //各行から先頭・末尾の空白とコメントを削除
+        foreach ($lines as &$line) {
+            $line = trim($line);
+            $line = preg_replace('/\/\/.*/', '', $line);
+            $line = preg_replace('/\/\*.*/', '', $line);
+            $line = preg_replace('/.*\*\//', '', $line);
+            $line = preg_replace('/^\*.*/', '', $line);
+            $line = trim($line);
+        }
+        
+        //配列をシンボルで更に分割
+        foreach ($lines as $key => $line) {
+            $lineAdd = preg_split("/(\s|\;|\(|\)|\{|\}|\.|\[|\]|\,|\+|\-|\*|\/|\&|\||\<|\>|\=|\~)/", $line, 0, PREG_SPLIT_NO_EMPTY | PREG_SPLIT_DELIM_CAPTURE);
+            $this->tokens = array_merge($this->tokens, $lineAdd);
+        }
+
+        //空白もしくはスペースのみの要素を削除
+        foreach ($this->tokens as $key => &$line) {
+            if ($line == "" || $line == " ") {
+                array_splice($this->tokens, $key, 1);
+            }
+        }
+        //スペースで分割されたstringConstantを再度結合
+        foreach ($this->tokens as $key => &$line) {
+            if (preg_match("/^\"\w+/", $line, $match)) {
+                $i = $key;
+                $word = $this->tokens[$i];
+                while (isset($this->tokens[$i]) && preg_match("/^\w*\"$/", $this->tokens[$i++]) != 1) {
+                    $word .= " " . $this->tokens[$i];
+                }
+                array_splice($this->tokens, $key, $i-$key, $word);
+            }
+        }
+    }
+
+    //トークンが存在する行が残っているか
+    public function hasMoreTokens()
+    {
+        if (isset($this->tokens[$this->index])) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    //次の行のトークンを読み込み
+    public function advance()
+    {
+        $this->currentToken = $this->tokens[$this->index++];
+    }
+
+    public function tokenType()
+    {
+        if ($this->currentToken == "class" ||
+            $this->currentToken == "constructor" ||
+            $this->currentToken == "function" ||
+            $this->currentToken == "method" ||
+            $this->currentToken == "field" ||
+            $this->currentToken == "static" ||
+            $this->currentToken == "var" ||
+            $this->currentToken == "int" ||
+            $this->currentToken == "char" ||
+            $this->currentToken == "boolean" ||
+            $this->currentToken == "void" ||
+            $this->currentToken == "true" ||
+            $this->currentToken == "false" ||
+            $this->currentToken == "null" ||
+            $this->currentToken == "this" ||
+            $this->currentToken == "let" ||
+            $this->currentToken == "do" ||
+            $this->currentToken == "if" ||
+            $this->currentToken == "else" ||
+            $this->currentToken == "while" ||
+            $this->currentToken == "return"
+        ) {
+            return "KEYWORD";
+        }
+
+        if ($this->currentToken == "{" ||
+            $this->currentToken == "}" ||
+            $this->currentToken == "(" ||
+            $this->currentToken == ")" ||
+            $this->currentToken == "[" ||
+            $this->currentToken == "]" ||
+            $this->currentToken == "." ||
+            $this->currentToken == "," ||
+            $this->currentToken == ";" ||
+            $this->currentToken == "+" ||
+            $this->currentToken == "-" ||
+            $this->currentToken == "*" ||
+            $this->currentToken == "/" ||
+            $this->currentToken == "&" ||
+            $this->currentToken == "|" ||
+            $this->currentToken == "<" ||
+            $this->currentToken == ">" ||
+            $this->currentToken == "=" ||
+            $this->currentToken == "~"
+        ) {
+            return "SYMBOL";
+        }
+
+        if (preg_match("/^\d+$/", $this->currentToken) == 1) {
+            return "INT_CONST";
+        }
+             
+        if (preg_match("/^(?!\")\w+/", $this->currentToken) == 1) {
+            return "IDENTIFIER";
+        }
+
+        if (preg_match("/^\"\w|\s+\"$/", $this->currentToken) == 1) {
+            return "STRING_CONST";
+        }
+    }
+
+    public function keyWord()
+    {
+        if ($this->tokenType() == "KEYWORD") {
+            if ($this->currentToken == "class") {
+                return "CLASS";
+            } elseif ($this->currentToken == "constructor") {
+                return "CONSTRUCTOR";
+            } elseif ($this->currentToken == "function") {
+                return "FUNCTION";
+            } elseif ($this->currentToken == "method") {
+                return "METHOD";
+            } elseif ($this->currentToken == "field") {
+                return "FIELD";
+            } elseif ($this->currentToken == "static") {
+                return "STATIC";
+            } elseif ($this->currentToken == "var") {
+                return "VAR";
+            } elseif ($this->currentToken == "int") {
+                return "INT";
+            } elseif ($this->currentToken == "char") {
+                return "CHAR";
+            } elseif ($this->currentToken == "boolean") {
+                return "BOOLEAN";
+            } elseif ($this->currentToken == "void") {
+                return "VOID";
+            } elseif ($this->currentToken == "true") {
+                return "TRUE";
+            } elseif ($this->currentToken == "false") {
+                return "FALSE";
+            } elseif ($this->currentToken == "null") {
+                return "NULL";
+            } elseif ($this->currentToken == "this") {
+                return "THIS";
+            } elseif ($this->currentToken == "let") {
+                return "LET";
+            } elseif ($this->currentToken == "do") {
+                return "DO";
+            } elseif ($this->currentToken == "if") {
+                return "IF";
+            } elseif ($this->currentToken == "else") {
+                return "ELSE";
+            } elseif ($this->currentToken == "while") {
+                return "WHILE";
+            } elseif ($this->currentToken == "return") {
+                return "RETURN";
+            }
+        }
+    }
+
+    public function symbol()
+    {
+        if ($this->tokenType() == "SYMBOL") {
+            return $this->currentToken;
+        }
+    }
+
+    public function identifier()
+    {
+        if ($this->tokenType() == "IDENTIFIER") {
+            return $this->currentToken;
+        }
+    }
+
+    public function intVal()
+    {
+        if ($this->tokenType() == "INT_CONST") {
+            return $this->currentToken;
+        }
+    }
+    public function stringVal()
+    {
+        if ($this->tokenType() == "STRING_CONST") {
+            preg_match('/^"(.*?)"$/', $this->currentToken, $match);
+            return $match[1];
+        }
+    }
+}
+
+function tokenize($jackTokenizer, $inputFilename)
+{
+    // 書き込みファイルを開く
+    preg_match("/(\S*?)\./", $inputFilename, $match);
+    $outputFilename = $match[1];
+    $outputfile = $outputFilename . "T_cmp.xml";
+    $fp_output = fopen($outputfile, 'w');
+    fputs($fp_output, "<tokens>"."\n");
+    
+    while ($jackTokenizer->hasMoreTokens()) {
+        $jackTokenizer->advance();
+        if ($jackTokenizer->tokenType() == "KEYWORD") {
+            fputs($fp_output, "<keyword> ".$jackTokenizer->currentToken." </keyword>"."\n");
+        } elseif ($jackTokenizer->tokenType() == "SYMBOL") {
+            if ($jackTokenizer->symbol() == "<") {
+                fputs($fp_output, "<symbol> &lt; </symbol>"."\n");
+            } elseif ($jackTokenizer->symbol() == ">") {
+                fputs($fp_output, "<symbol> &gt; </symbol>"."\n");
+            } elseif ($jackTokenizer->symbol() == "&") {
+                fputs($fp_output, "<symbol> &amp; </symbol>"."\n");
+            } else {
+                fputs($fp_output, "<symbol> ".$jackTokenizer->currentToken." </symbol>"."\n");
+            }
+        } elseif ($jackTokenizer->tokenType() == "IDENTIFIER") {
+            fputs($fp_output, "<identifier> ".$jackTokenizer->identifier()." </identifier>"."\n");
+        } elseif ($jackTokenizer->tokenType() == "INT_CONST") {
+            fputs($fp_output, "<integerConstant> ".$jackTokenizer->intVal()." </integerConstant>"."\n");
+        } elseif ($jackTokenizer->tokenType() == "STRING_CONST") {
+            fputs($fp_output, "<stringConstant> ".$jackTokenizer->stringVal()." </stringConstant>"."\n");
+        }
+    }
+    fputs($fp_output, "</tokens>"."\n");
+
+    return $outputfile;
+}
+
+function parse($outputfile, $inputFilename)
+{
+    //CompilationEngineの入力ストリーム
+    file_exists($outputfile) && ($fp_compilationInput=fopen($outputfile, "r")) || die("読み込みに失敗\n");
+            
+    //CompilationEngineの出力ストリーム(トークンxml)
+    preg_match("/(\S*?)\./", $inputFilename, $match);
+    $outputFilename = $match[1];
+    $outputfile = $outputFilename . ".xml";
+    $fp_compilationOutput = fopen($outputfile, 'w');
+
+    //CompilationEngineコンストラクタ
+    $compilationEngine = new CompilationEngine($fp_compilationInput, $fp_compilationOutput);
+
+    //コンパイル(パース)
+    $compilationEngine->compileClass();
+}
+
+
+class CompilationEngine
+{
+    public $fp_compilationInput;
+    public $fp_compilationOutput;
+    public $currentXMLToken;
+    public $symbolTable;
+    public $className;
+
+    public function __construct($fp_compilationInput, $fp_compilationOutput)
+    {
+        $this->fp_compilationInput = $fp_compilationInput;
+        $this->fp_compilationOutput = $fp_compilationOutput;
+        $this->symbolTable = new SymbolTable();
+    }
+    
+    //ファイルから次のコマンドを読み込み
+    public function advance()
+    {
+        $this->currentXMLToken = fgets($this->fp_compilationInput);
+    }
+    
+    //offsetまでファイルポインタを戻す
+    public function backfp($offset)
+    {
+        fseek($this->fp_compilationInput, $offset);
+    }
+    
+    //ファイルポインタを現時点にセーブ
+    public function saveFp()
+    {
+        $offset = ftell($this->fp_compilationInput);
+        return $offset;
+    }
+
+    public function compileClass()
+    {
+        $this->advance();
+        $this->advance();
+        preg_match("/\> (.*) \</", $this->currentXMLToken, $match);
+        if (isset($match[1]) && $match[1] == "class") {
+            fputs($this->fp_compilationOutput, "<class>"."\n");
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //class
+            $this->advance();
+            fputs($this->fp_compilationOutput, "[class, defined]"); //シンボルテーブル出力
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //className
+            preg_match("/\> (.*) \</", $this->currentXMLToken, $className);
+            $this->className = $className[1];
+            $this->advance();
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // {
+            while ($this->compileClassVarDec() || $this->compileSubroutine());
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // }
+            fputs($this->fp_compilationOutput, "</class>"."\n");
+        }
+    }
+
+    public function compileClassVarDec()
+    {
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \</", $this->currentXMLToken, $match); //$kindをセット
+        if (isset($match[1]) && ($match[1] == "static" || $match[1] == "field")) {
+            $kind = $match[1]; //$kindをセット
+            fputs($this->fp_compilationOutput, "<classVarDec>"."\n");
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //static or field宣言
+            $this->advance();
+            preg_match("/\> (.*) \</", $this->currentXMLToken, $type); //$typeをセット
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //type
+            $this->advance();
+            preg_match("/\> (.*) \</", $this->currentXMLToken, $name); //$nameをセット
+            $this->symbolTable->define($name[1], $type[1], $kind); //シンボルテーブルに登録
+            fputs($this->fp_compilationOutput, "[".$this->symbolTable->kindOf($name[1]).", ".$this->symbolTable->indexOf($name[1]).", defined]"); //シンボルテーブルの登録情報を出力
+            fputs($this->fp_compilationOutput, $this->currentXMLToken);  //varName
+            $this->advance();
+            preg_match("/\> (.*) \</", $this->currentXMLToken, $match);
+            while (isset($match[1]) && $match[1] == ",") {
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); //,
+                $this->advance();
+                preg_match("/\> (.*) \</", $this->currentXMLToken, $name); //$nameをセット
+                $this->symbolTable->define($name[1], $type[1], $kind); //シンボルテーブルに登録
+                fputs($this->fp_compilationOutput, "[".$this->symbolTable->kindOf($name[1]).", ".$this->symbolTable->indexOf($name[1]).", defined]"); //シンボルテーブルの登録情報を出力
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); //varName
+                $this->advance();
+                preg_match("/\> (.*) \</", $this->currentXMLToken, $match);
+            }
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //;
+            fputs($this->fp_compilationOutput, "</classVarDec>"."\n");
+            return true;
+        } else {
+            $this->backfp($offset);
+            return false;
+        }
+    }
+
+    public function compileSubroutine()
+    {
+        //サブルーチンのシンボルテーブルを初期化
+        $this->symbolTable->startSubroutine();
+
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \</", $this->currentXMLToken, $match);
+        if (isset($match[1]) && ($match[1] == "constructor" || $match[1] == "function" || $match[1] == "method")) {
+            fputs($this->fp_compilationOutput, "<subroutineDec>"."\n");
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //constructor/function/method
+            $offset = $this->saveFp();
+            $this->advance();
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+            if (isset($match[1]) && ($match[1] == "void" || $match[2] == "identifier")) {
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); //void/type
+                $this->advance();
+                preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $subroutineName);
+                fputs($this->fp_compilationOutput, "[subroutine, defined]"); //シンボルテーブル出力
+                fputs($this->fp_compilationOutput, $this->currentXMLToken);
+                $this->advance();
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // (
+                $this->compileParameterList();
+                $this->advance();
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // )
+                $this->compileSubroutineBody();
+                fputs($this->fp_compilationOutput, "</subroutineDec>"."\n");
+                return true;
+            } else {
+                $this->backfp($offset);
+            }
+        } else {
+            $this->backfp($offset);
+            return false;
+        }
+    }
+
+    public function compileParameterList()
+    {
+        fputs($this->fp_compilationOutput, "<parameterList>"."\n");
+        $this->compileTypeAndVarName();
+        fputs($this->fp_compilationOutput, "</parameterList>"."\n");
+    }
+
+    public function compileTypeAndVarName()
+    {
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        if (isset($match[1]) && ($match[1] == "int" || $match[1] == "char" || $match[1] == "boolean" || $match[2] == "identifier")) {
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $type);
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //パラメーターの型
+            $offset = $this->saveFp();
+            $this->advance();
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+            if (isset($match[1]) && $match[2] == "identifier") {
+                preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $name);
+                $this->symbolTable->define($name[1], $type[1], "arg"); //シンボルテーブルに登録
+                fputs($this->fp_compilationOutput, "[".$this->symbolTable->kindOf($name[1]).", ".$this->symbolTable->indexOf($name[1]).", defined]"); //シンボルテーブルの登録情報を出力
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); //パラメーター名
+            } else {
+                $this->backfp($offset);
+            }
+            
+            $offset = $this->saveFp();
+            $this->advance();
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+            if (isset($match[1]) && $match[1] == ",") { //カンマで続く場合
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // ,
+                $this->compileTypeAndVarName();
+            } else {
+                $this->backfp($offset);
+            }
+        } else {
+            $this->backfp($offset);
+        }
+    }
+    
+    public function compileSubroutineBody()
+    {
+        fputs($this->fp_compilationOutput, "<subroutineBody>"."\n");
+        $offset = $this->saveFp();
+        $this->advance();
+        fputs($this->fp_compilationOutput, $this->currentXMLToken); // {
+        while ($this->compileVarDec()) ;
+        $this->compileStatements($offset);
+        $this->advance();
+        fputs($this->fp_compilationOutput, $this->currentXMLToken); // }
+        fputs($this->fp_compilationOutput, "</subroutineBody>"."\n");
+    }
+    
+    public function compileVarDec()
+    {
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        if (isset($match[1]) && $match[1] == "var") {
+            fputs($this->fp_compilationOutput, "<varDec>"."\n");
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // var
+            $this->compileType();
+            $this->compileVarName();
+            $this->advance();
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+            while (isset($match[1]) && ($match[1] == ",")) {
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // ,
+                $this->compileVarName();
+                $this->advance();
+                preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+            }
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // ;
+            fputs($this->fp_compilationOutput, "</varDec>"."\n");
+            return true;
+        } else {
+            $this->backfp($offset);
+        }
+    }
+    
+    public function compileType()
+    {
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        if (isset($match[1]) && ($match[1] == "int" || $match[1] == "char" || $match[1] == "boolean" || $match[2] == "identifier")) {
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //type
+        } else {
+            $this->backfp($offset);
+        }
+    }
+
+    public function compileVarName()
+    {
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $type);
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        if (isset($match[1]) && $match[2] == "identifier") {
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $name);
+            $this->symbolTable->define($name[1], $type[1], "var"); //シンボルテーブルに登録
+            fputs($this->fp_compilationOutput, "[".$this->symbolTable->kindOf($name[1]).", ".$this->symbolTable->indexOf($name[1]).", defined]"); //シンボルテーブルの登録情報を出力
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //パラメーター名
+        } else {
+            $this->backfp($offset);
+        }
+    }
+    
+    public function compileStatements()
+    {
+        fputs($this->fp_compilationOutput, "<statements>"."\n");
+        while ($this->compileStatement());
+        fputs($this->fp_compilationOutput, "</statements>"."\n");
+    }
+
+    public function compileStatement()
+    {
+        if ($this->compileDo()) {
+            return true;
+        };
+        if ($this->compileLet()) {
+            return true;
+        };
+        if ($this->compileWhile()) {
+            return true;
+        };
+        if ($this->compileIf()) {
+            return true;
+        };
+        if ($this->compileReturn()) {
+            return true;
+        };
+    }
+
+    public function compileLet()
+    {
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        if (isset($match[1]) && ($match[1] == "let")) {
+            fputs($this->fp_compilationOutput, "<letStatement>"."\n");
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //let
+            $this->advance();
+            preg_match("/\> (.*) \</", $this->currentXMLToken, $name); //$nameをセット
+            fputs($this->fp_compilationOutput, "[".$this->symbolTable->kindOf($name[1]).", ".$this->symbolTable->indexOf($name[1]).", used]"); //シンボルテーブルの登録情報を出力
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //varName
+            $this->advance();
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+            if (isset($match[1]) && ($match[1] == "[")) {
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // [
+                $this->compileExpression();
+                $this->advance();
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // ]
+                $this->advance();
+            }
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // =
+            $this->compileExpression();
+            $this->advance();
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // ;
+            fputs($this->fp_compilationOutput, "</letStatement>"."\n");
+            return true;
+        } else {
+            $this->backfp($offset);
+        }
+    }
+    
+    public function compileDo()
+    {
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        if (isset($match[1]) && ($match[1] == "do")) {
+            fputs($this->fp_compilationOutput, "<doStatement>"."\n");
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //do
+            $this->compileSubroutineCall();
+            $this->advance();
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // ;
+            fputs($this->fp_compilationOutput, "</doStatement>"."\n");
+            return true;
+        } else {
+            $this->backfp($offset);
+        }
+    }
+
+    public function compileWhile()
+    {
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        if (isset($match[1]) && ($match[1] == "while")) {
+            fputs($this->fp_compilationOutput, "<whileStatement>"."\n");
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //while
+            $this->advance();
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //(
+            $this->compileExpression();
+            $this->advance();
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // )
+            $this->advance();
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // {
+            $this->compileStatements();
+            $this->advance();
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // }
+            fputs($this->fp_compilationOutput, "</whileStatement>"."\n");
+            return true;
+        } else {
+            $this->backfp($offset);
+        }
+    }
+
+    public function compileIf()
+    {
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        if (isset($match[1]) && ($match[1] == "if")) {
+            fputs($this->fp_compilationOutput, "<ifStatement>"."\n");
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //if
+            $this->advance();
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //(
+            $this->compileExpression();
+            $this->advance();
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // )
+            $this->advance();
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // {
+            $this->compileStatements();
+            $this->advance();
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // }
+            $offset = $this->saveFp();
+            $this->advance();
+
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+            if (isset($match[1]) && ($match[1] == "else")) {
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // else
+                $this->advance();
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // {
+                $this->compileStatements();
+                $this->advance();
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // }
+            } else {
+                $this->backfp($offset);
+            }
+
+            fputs($this->fp_compilationOutput, "</ifStatement>"."\n");
+            return true;
+        } else {
+            $this->backfp($offset);
+        }
+    }
+
+    public function compileReturn()
+    {
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        if (isset($match[1]) && ($match[1] == "return")) {
+            fputs($this->fp_compilationOutput, "<returnStatement>"."\n");
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); //return
+            $offset = $this->saveFp();
+            $this->advance();
+
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match); //expression?
+            if (isset($match[1]) && $match[1] != ';') {
+                $this->backfp($offset);
+                $this->compileExpression();
+                $this->advance();
+                preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+                while (isset($match[1]) && $match[1] == ",") {
+                    $this->compileExpression();
+                    $this->advance();
+                    preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+                }
+            }
+            
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // ;
+            fputs($this->fp_compilationOutput, "</returnStatement>"."\n");
+            return true;
+        } else {
+            $this->backfp($offset);
+        }
+    }
+    
+    public function compileSubroutineCall()
+    {
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        if (isset($match[1]) && ($match[2] == "identifier")) {
+            preg_match("/\> (.*) \</", $this->currentXMLToken, $name); //$nameをセット
+            fputs($this->fp_compilationOutput, "[".$this->symbolTable->kindOf($name[1]).", ".$this->symbolTable->indexOf($name[1]).", used]"); //シンボルテーブルの登録情報を出力
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // subroutineName or className|varName
+            $subroutineOrClassName = $name[1];
+            $offset = $this->saveFp();
+            $this->advance();
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+            if (isset($match[1]) && ($match[1] == "(")) {
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // (
+                $this->compileExpressionList();
+                $this->advance();
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // )
+            } elseif (isset($match[1]) && ($match[1] == ".")) {
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // .
+                $this->advance();
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // subroutineName
+                preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $subroutineName);
+                $subroutineName = $subroutineName[1];
+                $this->advance();
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // (
+                $nArgs = $this->compileExpressionList();
+                $this->advance();
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // )
+            } else {
+                $this->backfp($offset);
+            }
+        } else {
+            $this->backfp($offset);
+        }
+    }
+    
+    public function compileExpressionList()
+    {
+        $nArgs = 0;
+        $offset = $this->saveFp();
+        $this->advance();
+        fputs($this->fp_compilationOutput, "<expressionList>"."\n");
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        if (isset($match[1]) && $match[1] != ')') {
+            $this->backfp($offset);
+            $this->compileExpression();
+            $nArgs++;
+
+            $offset = $this->saveFp();
+            $this->advance();
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+            while (isset($match[1]) && $match[1] == ",") {
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // ,
+                $this->compileExpression();
+                $nArgs++;
+                $offset = $this->saveFp();
+                $this->advance();
+                preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+            }
+            $this->backfp($offset);
+        } else {
+            $this->backfp($offset);
+        }
+        fputs($this->fp_compilationOutput, "</expressionList>"."\n");
+        return $nArgs;
+    }
+    
+    public function compileExpression()
+    {
+        fputs($this->fp_compilationOutput, "<expression>"."\n");
+        $this->compileTerm();
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        while (isset($match[1]) && ($match[1] == "+" || $match[1] == "-" || $match[1] == "*" || $match[1] == "/" || $match[1] == "&amp;" || $match[1] == "|" || $match[1] == "&lt;" || $match[1] == "&gt;" || $match[1] == "=")) {
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // op
+            $this->compileTerm();
+            $offset = $this->saveFp();
+            $this->advance();
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        }
+        $this->backfp($offset);
+
+        fputs($this->fp_compilationOutput, "</expression>"."\n");
+    }
+    
+    public function compileTerm()
+    {
+        $offset = $this->saveFp();
+        $this->advance();
+        preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+        if (isset($match[1]) && ($match[1] == "-" || $match[1] == "~")) {
+            fputs($this->fp_compilationOutput, "<term>"."\n");
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // - | ~
+            $this->compileTerm();
+            fputs($this->fp_compilationOutput, "</term>"."\n");
+        } elseif (isset($match[1]) && ($match[1] == "(")) {
+            fputs($this->fp_compilationOutput, "<term>"."\n");
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // (
+            $this->compileExpression();
+            $this->advance();
+            fputs($this->fp_compilationOutput, $this->currentXMLToken); // )
+            fputs($this->fp_compilationOutput, "</term>"."\n");
+        } elseif (isset($match[1]) && ($match[2] == "integerConstant" || $match[2] == "stringConstant" || $match[2] == "keyword" || $match[2] == "identifier")) {
+            $identifierFlag = false;
+            $constantFlag = false;
+            if ($match[2] == "identifier") {
+                $identifierFlag = true;
+            } elseif ($match[2] == "integerConstant" || $match[2] == "stringConstant") {
+                $constantFlag = true;
+            }
+            $this->advance();
+            preg_match("/\> (.*) \<\/(.*)\>/", $this->currentXMLToken, $match);
+            if (isset($match[1]) && ($match[1] == "[")) {
+                $this->backfp($offset);
+                $this->advance();
+                fputs($this->fp_compilationOutput, "<term>"."\n");
+                preg_match("/\> (.*) \</", $this->currentXMLToken, $name); //$nameをセット
+                fputs($this->fp_compilationOutput, "[".$this->symbolTable->kindOf($name[1]).", ".$this->symbolTable->indexOf($name[1]).", used]"); //シンボルテーブルの登録情報を出力
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // varName
+                $this->advance();
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // [
+                $this->compileExpression();
+                $this->advance();
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // ]
+                fputs($this->fp_compilationOutput, "</term>"."\n");
+            } elseif (isset($match[1]) && ($match[1] == "(" || $match[1] == ".")) {
+                $this->backfp($offset);
+                fputs($this->fp_compilationOutput, "<term>"."\n");
+                $this->compileSubroutineCall();
+                fputs($this->fp_compilationOutput, "</term>"."\n");
+            } else {
+                $this->backfp($offset);
+                $this->advance();
+                fputs($this->fp_compilationOutput, "<term>"."\n");
+                preg_match("/\> (.*) \</", $this->currentXMLToken, $name); //$nameをセット
+                if ($identifierFlag) {
+                    fputs($this->fp_compilationOutput, "[".$this->symbolTable->kindOf($name[1]).", ".$this->symbolTable->indexOf($name[1]).", used]"); //シンボルテーブルの登録情報を出力
+                }
+                fputs($this->fp_compilationOutput, $this->currentXMLToken); // varName
+                fputs($this->fp_compilationOutput, "</term>"."\n");
+            }
+        } else {
+            $this->backfp($offset);
+        }
+    }
+}
+
+//コマンドラインからファイル名を取得し変数に格納
+if ($argc != 2) {
+    echo "不正な引数です\n";
+    return;
+}
+$fileOrDirName = $argv[1];
+
+if (is_dir($fileOrDirName)) {
+    //ディレクトリの場合
+    foreach (glob($fileOrDirName.'/{*.jack}', GLOB_BRACE) as $inputFilename) {
+        if (is_file($inputFilename)) {
+            //JackTokenizerコンストラクタ
+            $jackTokenizer = new JackTokenizer($inputFilename);
+
+            //トークンxml
+            $outputfile = tokenize($jackTokenizer, $inputFilename);
+ 
+            //パースした結果をxmlとして出力
+            parse($outputfile, $inputFilename);
+        }
+    }
+} else {
+    if (is_file($fileOrDirName)) {
+        //読み込みファイル名
+        $inputFilename = $fileOrDirName;
+        //JackTokenizerコンストラクタ
+        $jackTokenizer = new JackTokenizer($inputFilename);
+
+        //トークンxml
+        $outputfile = tokenize($jackTokenizer, $inputFilename);
+
+        //パースした結果をxmlとして出力
+        parse($outputfile, $inputFilename);
+    }
+}

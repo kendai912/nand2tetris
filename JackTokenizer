@@ -1,0 +1,206 @@
+<?php
+
+class JackTokenizer
+{
+    public $tokens = [];
+    public $index = 0;
+    public $currentToken = "";
+
+    public function __construct($inputFilename)
+    {
+        global $fileOrDirName;
+
+        //読み込みファイルを開き各行を配列に格納（'r'は読み込みモードで開く）
+        file_exists($inputFilename) && ($lines = file($inputFilename)) || die("読み込みに失敗\n");
+
+        //各行から先頭・末尾の空白とコメントを削除
+        foreach ($lines as &$line) {
+            $line = trim($line);
+            $line = preg_replace('/\/\/.*/', '', $line);
+            $line = preg_replace('/\/\*.*/', '', $line);
+            $line = preg_replace('/.*\*\//', '', $line);
+            $line = preg_replace('/^\*.*/', '', $line);
+            $line = trim($line);
+        }
+        
+        //配列をシンボルで更に分割
+        foreach ($lines as $key => $line) {
+            $lineAdd = preg_split("/(\s|\;|\(|\)|\{|\}|\.|\[|\]|\,|\+|\-|\*|\/|\&|\||\<|\>|\=|\~)/", $line, 0, PREG_SPLIT_NO_EMPTY | PREG_SPLIT_DELIM_CAPTURE);
+            $this->tokens = array_merge($this->tokens, $lineAdd);
+        }
+
+        //空白もしくはスペースのみの要素を削除
+        foreach ($this->tokens as $key => &$line) {
+            if ($line == "" || $line == " ") {
+                array_splice($this->tokens, $key, 1);
+            }
+        }
+        //スペースで分割されたstringConstantを再度結合
+        foreach ($this->tokens as $key => &$line) {
+            if (preg_match("/^\"\w+/", $line, $match)) {
+                $i = $key;
+                $word = $this->tokens[$i];
+                while (isset($this->tokens[$i]) && preg_match("/^\w*\"$/", $this->tokens[$i++]) != 1) {
+                    $word .= " " . $this->tokens[$i];
+                }
+                array_splice($this->tokens, $key, $i-$key, $word);
+            }
+        }
+    }
+
+    //トークンが存在する行が残っているか
+    public function hasMoreTokens()
+    {
+        if (isset($this->tokens[$this->index])) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    //次の行のトークンを読み込み
+    public function advance()
+    {
+        $this->currentToken = $this->tokens[$this->index++];
+    }
+
+    public function tokenType()
+    {
+        if ($this->currentToken == "class" ||
+            $this->currentToken == "constructor" ||
+            $this->currentToken == "function" ||
+            $this->currentToken == "method" ||
+            $this->currentToken == "field" ||
+            $this->currentToken == "static" ||
+            $this->currentToken == "var" ||
+            $this->currentToken == "int" ||
+            $this->currentToken == "char" ||
+            $this->currentToken == "boolean" ||
+            $this->currentToken == "void" ||
+            $this->currentToken == "true" ||
+            $this->currentToken == "false" ||
+            $this->currentToken == "null" ||
+            $this->currentToken == "this" ||
+            $this->currentToken == "let" ||
+            $this->currentToken == "do" ||
+            $this->currentToken == "if" ||
+            $this->currentToken == "else" ||
+            $this->currentToken == "while" ||
+            $this->currentToken == "return"
+        ) {
+            return "KEYWORD";
+        }
+
+        if ($this->currentToken == "{" ||
+            $this->currentToken == "}" ||
+            $this->currentToken == "(" ||
+            $this->currentToken == ")" ||
+            $this->currentToken == "[" ||
+            $this->currentToken == "]" ||
+            $this->currentToken == "." ||
+            $this->currentToken == "," ||
+            $this->currentToken == ";" ||
+            $this->currentToken == "+" ||
+            $this->currentToken == "-" ||
+            $this->currentToken == "*" ||
+            $this->currentToken == "/" ||
+            $this->currentToken == "&" ||
+            $this->currentToken == "|" ||
+            $this->currentToken == "<" ||
+            $this->currentToken == ">" ||
+            $this->currentToken == "=" ||
+            $this->currentToken == "~"
+        ) {
+            return "SYMBOL";
+        }
+
+        if (preg_match("/^\d+$/", $this->currentToken) == 1) {
+            return "INT_CONST";
+        }
+             
+        if (preg_match("/^(?!\")\w+/", $this->currentToken) == 1) {
+            return "IDENTIFIER";
+        }
+
+        if (preg_match("/^\"\w|\s+\"$/", $this->currentToken) == 1) {
+            return "STRING_CONST";
+        }
+    }
+
+    public function keyWord()
+    {
+        if ($this->tokenType() == "KEYWORD") {
+            if ($this->currentToken == "class") {
+                return "CLASS";
+            } elseif ($this->currentToken == "constructor") {
+                return "CONSTRUCTOR";
+            } elseif ($this->currentToken == "function") {
+                return "FUNCTION";
+            } elseif ($this->currentToken == "method") {
+                return "METHOD";
+            } elseif ($this->currentToken == "field") {
+                return "FIELD";
+            } elseif ($this->currentToken == "static") {
+                return "STATIC";
+            } elseif ($this->currentToken == "var") {
+                return "VAR";
+            } elseif ($this->currentToken == "int") {
+                return "INT";
+            } elseif ($this->currentToken == "char") {
+                return "CHAR";
+            } elseif ($this->currentToken == "boolean") {
+                return "BOOLEAN";
+            } elseif ($this->currentToken == "void") {
+                return "VOID";
+            } elseif ($this->currentToken == "true") {
+                return "TRUE";
+            } elseif ($this->currentToken == "false") {
+                return "FALSE";
+            } elseif ($this->currentToken == "null") {
+                return "NULL";
+            } elseif ($this->currentToken == "this") {
+                return "THIS";
+            } elseif ($this->currentToken == "let") {
+                return "LET";
+            } elseif ($this->currentToken == "do") {
+                return "DO";
+            } elseif ($this->currentToken == "if") {
+                return "IF";
+            } elseif ($this->currentToken == "else") {
+                return "ELSE";
+            } elseif ($this->currentToken == "while") {
+                return "WHILE";
+            } elseif ($this->currentToken == "return") {
+                return "RETURN";
+            }
+        }
+    }
+
+    public function symbol()
+    {
+        if ($this->tokenType() == "SYMBOL") {
+            return $this->currentToken;
+        }
+    }
+
+    public function identifier()
+    {
+        if ($this->tokenType() == "IDENTIFIER") {
+            return $this->currentToken;
+        }
+    }
+
+    public function intVal()
+    {
+        if ($this->tokenType() == "INT_CONST") {
+            return $this->currentToken;
+        }
+    }
+    public function stringVal()
+    {
+        if ($this->tokenType() == "STRING_CONST") {
+            preg_match('/^"(.*?)"$/', $this->currentToken, $match);
+            return $match[1];
+        }
+    }
+}

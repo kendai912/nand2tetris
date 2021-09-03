@@ -1,0 +1,354 @@
+#!/usr/bin/env php
+<?php
+
+class Parser
+{
+    public $currentCommand = "";
+
+    //コマンドが存在する行が残っているか
+    public function hasMoreCommands($fp)
+    {
+        while (!feof($fp)) {
+            $offset = ftell($fp);
+            $command = fgets($fp);
+            if (!preg_match("/^\r\n/", $command) && !preg_match("/^\/\/.*/", $command)) {
+                fseek($fp, $offset);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //ファイルから次のコマンドを読み込み
+    public function advance($fp)
+    {
+        $this->currentCommand = trim(fgets($fp));
+    }
+
+    //コマンド種類を返却
+    public function commandType()
+    {
+        if (substr($this->currentCommand, 0, 1) == "@") {
+            return "A_COMMAND";
+        }
+        if (preg_match("/=/", $this->currentCommand)) {
+            return "C_COMMAND";
+        }
+        if (preg_match("/;/", $this->currentCommand)) {
+            return "C_COMMAND";
+        }
+        if (substr($this->currentCommand, 0, 1) == "(") {
+            return "L_COMMAND";
+        }
+    }
+
+    //A命令、ラベルのシンボルを返却
+    public function symbol()
+    {
+        if ($this->commandType() == "C_COMMAND") {
+            return;
+        }
+        if ($this->commandType() == "A_COMMAND") {
+            preg_match("/@(\S*)/", $this->currentCommand, $match);
+            return $match[1];
+        }
+        if ($this->commandType() == "L_COMMAND") {
+            preg_match("/\((\S*)\)/", $this->currentCommand, $match);
+            return $match[1];
+        }
+    }
+
+    //C命令のdestニーモニックを返却
+    public function dest()
+    {
+        if ($this->commandType() == "C_COMMAND") {
+            if (preg_match("/(\S*)=/", $this->currentCommand, $match)) {
+                return $match[1];
+            } else {
+                return "";
+            }
+        }
+        return "";
+    }
+
+    //C命令のcompニーモニックを返却
+    public function comp()
+    {
+        if ($this->commandType() == "C_COMMAND") {
+            if (preg_match("/=(\S*);?/", $this->currentCommand, $match)) {
+                return $match[1];
+            } elseif (preg_match("/(\S*);/", $this->currentCommand, $match)) {
+                return $match[1];
+            }
+        }
+        return "";
+    }
+
+    //C命令のjumpニーモニックを返却
+    public function jump()
+    {
+        if ($this->commandType() == "C_COMMAND") {
+            if (preg_match("/;(\S*)/", $this->currentCommand, $match)) {
+                return $match[1];
+            }
+        }
+        return "";
+    }
+}
+
+class Code
+{
+    public function dest($dest)
+    {
+        if ($dest == "") {
+            return "000";
+        }
+        if ($dest == "M") {
+            return "001";
+        }
+        if ($dest == "D") {
+            return "010";
+        }
+        if ($dest == "MD") {
+            return "011";
+        }
+        if ($dest == "A") {
+            return "100";
+        }
+        if ($dest == "AM") {
+            return "101";
+        }
+        if ($dest == "AD") {
+            return "110";
+        }
+        if ($dest == "AMD") {
+            return "111";
+        }
+    }
+
+    public function comp($comp)
+    {
+        if ($comp == "0") {
+            return "0101010";
+        }
+        if ($comp == "1") {
+            return "0111111";
+        }
+        if ($comp == "-1") {
+            return "0111010";
+        }
+        if ($comp == "D") {
+            return "0001100";
+        }
+        if ($comp == "A") {
+            return "0110000";
+        }
+        if ($comp == "!D") {
+            return "0001101";
+        }
+        if ($comp == "!A") {
+            return "0110001";
+        }
+        if ($comp == "-D") {
+            return "0001111";
+        }
+        if ($comp == "-A") {
+            return "0110011";
+        }
+        if ($comp == "D+1") {
+            return "0011111";
+        }
+        if ($comp == "A+1") {
+            return "0110111";
+        }
+        if ($comp == "D-1") {
+            return "0001110";
+        }
+        if ($comp == "A-1") {
+            return "0110010";
+        }
+        if ($comp == "D+A") {
+            return "0000010";
+        }
+        if ($comp == "D-A") {
+            return "0010011";
+        }
+        if ($comp == "A-D") {
+            return "0000111";
+        }
+        if ($comp == "D&A") {
+            return "0000000";
+        }
+        if ($comp == "D|A") {
+            return "0010101";
+        }
+
+        if ($comp == "M") {
+            return "1110000";
+        }
+        if ($comp == "!M") {
+            return "1110001";
+        }
+        if ($comp == "-M") {
+            return "1110011";
+        }
+        if ($comp == "M+1") {
+            return "1110111";
+        }
+        if ($comp == "M-1") {
+            return "1110010";
+        }
+        if ($comp == "D+M") {
+            return "1000010";
+        }
+        if ($comp == "D-M") {
+            return "1010011";
+        }
+        if ($comp == "M-D") {
+            return "1000111";
+        }
+        if ($comp == "D&M") {
+            return "1000000";
+        }
+        if ($comp == "D|M") {
+            return "1010101";
+        }
+    }
+
+    public function jump($jump)
+    {
+        if ($jump == "") {
+            return "000";
+        }
+        if ($jump == "JGT") {
+            return "001";
+        }
+        if ($jump == "JEQ") {
+            return "010";
+        }
+        if ($jump == "JGE") {
+            return "011";
+        }
+        if ($jump == "JLT") {
+            return "100";
+        }
+        if ($jump == "JNE") {
+            return "101";
+        }
+        if ($jump == "JLE") {
+            return "110";
+        }
+        if ($jump == "JMP") {
+            return "111";
+        }
+    }
+}
+
+class SymbolTable
+{
+    public $symbolTable = [
+        'SP' => 0,
+        'LCL' => 1,
+        'ARG' => 2,
+        'THIS' => 3,
+        'THAT' => 4,
+        'R0' => 0,
+        'R1' => 1,
+        'R2' => 2,
+        'R3' => 3,
+        'R4' => 4,
+        'R5' => 5,
+        'R6' => 6,
+        'R7' => 7,
+        'R8' => 8,
+        'R9' => 9,
+        'R10' => 10,
+        'R11' => 11,
+        'R12' => 12,
+        'R13' => 13,
+        'R14' => 14,
+        'R15' => 15,
+        'SCREEN' => 16384,
+        'KBD' => 24576,
+    ];
+
+    public $varAddress = 16;
+
+    public function addEntry($symbol, $address)
+    {
+        $this->symbolTable[$symbol] = $address;
+    }
+
+    public function getAddress($symbol)
+    {
+        return $this->symbolTable[$symbolTable];
+    }
+}
+
+//コマンドラインからファイル名を取得し変数に格納
+if ($argc != 2) {
+    echo "不正な引数です\n";
+    return;
+}
+$filename = $argv[1];
+
+//読み込みファイルを開く（'r'は読み込みモードで開く）
+file_exists($filename) && ($fp_input=fopen($filename, "r")) || die("読み込みに失敗\n");
+
+//作成するバイナリファイル名の指定
+preg_match("/\/(\S*?)\./", $filename, $match);
+$outputfile = $match[1] . ".hack";
+// ファイルポインタを開く
+$fp_output = fopen($outputfile, 'w');
+
+//コンストラクタ
+$parser = new Parser();
+$code = new Code();
+$symbolTable = new SymbolTable();
+
+//1回目のパス
+$rowNum = 0;
+while ($parser->hasMoreCommands($fp_input)) {
+    //次のコマンドを読み込み
+    $parser->advance($fp_input);
+
+    if ($parser->commandType() == "L_COMMAND") {
+        //Lコマンドの場合はROMアドレスをシンボルテーブルに追加
+        $symbolTable->addEntry($parser->symbol(), $rowNum);
+    } else {
+        //Lコマンド以外は行カウントを+1
+        $rowNum++;
+    }
+}
+
+//読み込みファイルのポイントを先頭へ
+rewind($fp_input);
+
+//2回目のパス
+while ($parser->hasMoreCommands($fp_input)) {
+    //次のコマンドを読み込み
+    $parser->advance($fp_input);
+
+    //コマンドの種類を判定
+    if ($parser->commandType() == "A_COMMAND") {
+        //シンボルテーブルに既に存在するラベルの場合
+        if (array_key_exists($parser->symbol(), $symbolTable->symbolTable)) {
+            fputs($fp_output, sprintf("%016b", $symbolTable->symbolTable[$parser->symbol()]) ."\n");
+        //数値アドレスの場合
+        } elseif (is_numeric($parser->symbol())) {
+            fputs($fp_output, sprintf("%016b", $parser->symbol()) ."\n");
+        //変数ラベルの場合
+        } else {
+            $symbolTable->addEntry($parser->symbol(), $symbolTable->varAddress);
+            $symbolTable->varAddress++;
+            fputs($fp_output, sprintf("%016b", $symbolTable->symbolTable[$parser->symbol()]) ."\n");
+        }
+    } elseif ($parser->commandType() == "C_COMMAND") {
+        $cCode = "111" . $code->comp($parser->comp()) . $code->dest($parser->dest()) . $code->jump($parser->jump());
+        fputs($fp_output, $cCode . "\n");
+    }
+}
+
+//ファイルを閉じる
+fclose($fp_input);
+fclose($fp_output);

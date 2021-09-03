@@ -1,0 +1,799 @@
+#!/usr/bin/env php
+<?php
+
+class Parser
+{
+    public $currentCommand = "";
+
+    //コマンドが存在する行が残っているか
+    public function hasMoreCommands($fp)
+    {
+        while (!feof($fp)) {
+            $offset = ftell($fp);
+            $command = fgets($fp);
+            if (!preg_match("/^\r\n/", $command) && !preg_match("/^\/\/.*/", $command)) {
+                fseek($fp, $offset);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //ファイルから次のコマンドを読み込み
+    public function advance($fp)
+    {
+        $trimedLine = trim(fgets($fp)); //先頭と末尾の空白を削除
+        $this->currentCommand = substr($trimedLine, 0, strcspn($trimedLine, '//')); //コメントを削除
+    }
+
+
+    //コマンド種類を返却
+    public function commandType()
+    {
+        if (preg_match("/^add|sub|neg|eq|gt|lt|and|or|not/", $this->currentCommand)) {
+            return "C_ARITHMETIC";
+        }
+        if (preg_match("/^push/", $this->currentCommand)) {
+            return "C_PUSH";
+        }
+        if (preg_match("/^pop/", $this->currentCommand)) {
+            return "C_POP";
+        }
+        if (preg_match("/^label/", $this->currentCommand)) {
+            return "C_LABEL";
+        }
+        if (preg_match("/^goto/", $this->currentCommand)) {
+            return "C_GOTO";
+        }
+        if (preg_match("/^if-goto/", $this->currentCommand)) {
+            return "C_IF";
+        }
+        if (preg_match("/^function/", $this->currentCommand)) {
+            return "C_FUNCTION";
+        }
+        if (preg_match("/^return/", $this->currentCommand)) {
+            return "C_RETURN";
+        }
+        if (preg_match("/^call/", $this->currentCommand)) {
+            return "C_CALL";
+        }
+    }
+
+    //コマンドの最初の引数を返却
+    public function arg1()
+    {
+        //C_RETURNの場合は対象外
+        if ($this->commandType() == "C_RETURN") {
+            return;
+        }
+
+        //C_ARITHMETICの場合はコマンドをそのまま返却
+        if ($this->commandType() == "C_ARITHMETIC") {
+            preg_match("/^(\S*)/", $this->currentCommand, $match);
+            return $match[1];
+        }
+
+        if (preg_match("/^\S*( |\t)+(\S*)/", $this->currentCommand, $match)) {
+            return $match[2];
+        }
+    }
+
+    //コマンドの２番目の引数を返却
+    public function arg2()
+    {
+        if ($this->commandType() == "C_PUSH" || $this->commandType() == "C_POP" || $this->commandType() == "C_FUNCTION" || $this->commandType() == "C_CALL") {
+            if (preg_match("/^\S*( |\t)+(\S*)( |\t)+(\S*)/", $this->currentCommand, $match)) {
+                return $match[4];
+            }
+        }
+    }
+}
+
+class CodeWriter
+{
+    public $outputFilename;
+    public $inputFilename;
+    public $fp_output;
+    public $labelNum = 0;
+
+    public function __construct($outputFilename)
+    {
+        //作成するバイナリファイル名の指定
+        $this->outputFilename = $outputFilename;
+        $outputfile = $outputFilename . ".asm";
+        // 書き込みファイルを開く
+        $this->fp_output = fopen($outputfile, 'w');
+    }
+    
+    
+    public function setFileName($inputFilenameDir)
+    {
+        preg_match("/\/(\S*?)\./", $inputFilenameDir, $match);
+        $inputFilename = $match[1];
+        $this->inputFilename = $inputFilename;
+    }
+
+    public function close()
+    {
+        fclose($this->fp_output);
+    }
+
+    public function writeInit()
+    {
+        //SPを0x0100に初期化
+        $bootstrapCode = "@256"."\n";
+        $bootstrapCode .= "D=A"."\n";
+        $bootstrapCode .= "@SP"."\n";
+        $bootstrapCode .= "M=D"."\n";
+        fputs($this->fp_output, $bootstrapCode);
+        //Sys.initを実行
+        $this->writeCall("Sys.init", 0);
+    }
+
+    public function writeArithmetic($command)
+    {
+        if ($command == "add") {
+            //スタックから１つ目の変数を取り出しDレジスタに格納
+            $code = "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            $code .= "D=M"."\n";
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //スタックから２つ目の変数を取得
+            $code .= "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            //計算を実行
+            $code .= "D=D+M"."\n";
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //スタックに計算結果を格納
+            $code .= "A=M"."\n";
+            $code .= "M=D"."\n";
+            //スタックポインタを+1
+            $code .= "@SP"."\n";
+            $code .= "M=M+1"."\n";
+            fputs($this->fp_output, $code);
+        } elseif ($command == "sub") {
+            //スタックから１つ目の変数を取り出しDレジスタに格納
+            $code = "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            $code .= "D=M"."\n";
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //スタックから２つ目の変数を取得
+            $code .= "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            //計算を実行
+            $code .= "D=M-D"."\n";
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //スタックに計算結果を格納
+            $code .= "A=M"."\n";
+            $code .= "M=D"."\n";
+            //スタックポインタを+1
+            $code .= "@SP"."\n";
+            $code .= "M=M+1"."\n";
+            fputs($this->fp_output, $code);
+        } elseif ($command == "neg") {
+            //スタックから１つ目の変数を取り出し補数を格納
+            $code = "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            $code .= "M=-M"."\n";
+            fputs($this->fp_output, $code);
+        } elseif ($command == "eq") {
+            //スタックから１つ目の変数を取り出しDレジスタに格納
+            $code = "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            $code .= "D=M"."\n";
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //スタックから２つ目の変数を取得
+            $code .= "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            //計算を実行
+            $code .= "D=M-D"."\n";  //D=x-y
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //計算結果に応じてJUMP
+            $code .= "@". "TRUE_JEQ_".$this->labelNum."\n";
+            $code .= "D;JEQ"."\n";
+            $code .= "@". "FALSE_JEQ_".$this->labelNum."\n";
+            $code .= "D;JNE"."\n";
+            //x=yの場合はスタックにtrue(-1)を格納
+            $code .= "(TRUE_JEQ_".$this->labelNum.")\n";
+            $code .= "@SP"."\n";
+            $code .= "A=M"."\n";
+            $code .= "M=-1"."\n";
+            $code .= "@NEXT_JEQ_".$this->labelNum."\n";
+            $code .= "0;JMP"."\n";
+            //x<>yの場合はスタックにfalse(0)を格納
+            $code .= "(FALSE_JEQ_".$this->labelNum.")\n";
+            $code .= "@SP"."\n";
+            $code .= "A=M"."\n";
+            $code .= "M=0"."\n";
+            $code .= "@NEXT_JEQ_".$this->labelNum."\n";
+            $code .= "0;JMP"."\n";
+            //スタックポインタを+1
+            $code .= "(NEXT_JEQ_".$this->labelNum.")\n";
+            $code .= "@SP"."\n";
+            $code .= "M=M+1"."\n";
+            //元の命令に戻る
+            fputs($this->fp_output, $code);
+        } elseif ($command == "gt") {
+            //スタックから１つ目の変数を取り出しDレジスタに格納
+            $code = "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            $code .= "D=M"."\n";
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //スタックから２つ目の変数を取得
+            $code .= "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            //計算を実行
+            $code .= "D=M-D"."\n";  //D=x-y
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //計算結果に応じてJUMP
+            $code .= "@". "TRUE_JGT_".$this->labelNum."\n";
+            $code .= "D;JGT"."\n";
+            $code .= "@". "FALSE_JGT_".$this->labelNum."\n";
+            $code .= "D;JLE"."\n";
+            //x=yの場合はスタックにtrue(-1)を格納
+            $code .= "(TRUE_JGT_".$this->labelNum.")\n";
+            $code .= "@SP"."\n";
+            $code .= "A=M"."\n";
+            $code .= "M=-1"."\n";
+            $code .= "@NEXT_JGT_".$this->labelNum."\n";
+            $code .= "0;JMP"."\n";
+            //x<>yの場合はスタックにfalse(0)を格納
+            $code .= "(FALSE_JGT_".$this->labelNum.")\n";
+            $code .= "@SP"."\n";
+            $code .= "A=M"."\n";
+            $code .= "M=0"."\n";
+            $code .= "@NEXT_JGT_".$this->labelNum."\n";
+            $code .= "0;JMP"."\n";
+            //スタックポインタを+1
+            $code .= "(NEXT_JGT_".$this->labelNum.")\n";
+            $code .= "@SP"."\n";
+            $code .= "M=M+1"."\n";
+            //元の命令に戻る
+            fputs($this->fp_output, $code);
+        } elseif ($command == "lt") {
+            //スタックから１つ目の変数を取り出しDレジスタに格納
+            $code = "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            $code .= "D=M"."\n";
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //スタックから２つ目の変数を取得
+            $code .= "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            //計算を実行
+            $code .= "D=M-D"."\n";  //D=x-y
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //計算結果に応じてJUMP
+            $code .= "@". "TRUE_JLT_".$this->labelNum."\n";
+            $code .= "D;JLT"."\n";
+            $code .= "@". "FALSE_JLT_".$this->labelNum."\n";
+            $code .= "D;JGE"."\n";
+            //x=yの場合はスタックにtrue(-1)を格納
+            $code .= "(TRUE_JLT_".$this->labelNum.")\n";
+            $code .= "@SP"."\n";
+            $code .= "A=M"."\n";
+            $code .= "M=-1"."\n";
+            $code .= "@NEXT_JLT_".$this->labelNum."\n";
+            $code .= "0;JMP"."\n";
+            //x<>yの場合はスタックにfalse(0)を格納
+            $code .= "(FALSE_JLT_".$this->labelNum.")\n";
+            $code .= "@SP"."\n";
+            $code .= "A=M"."\n";
+            $code .= "M=0"."\n";
+            $code .= "@NEXT_JLT_".$this->labelNum."\n";
+            $code .= "0;JMP"."\n";
+            //スタックポインタを+1
+            $code .= "(NEXT_JLT_".$this->labelNum.")\n";
+            $code .= "@SP"."\n";
+            $code .= "M=M+1"."\n";
+            //元の命令に戻る
+            fputs($this->fp_output, $code);
+        } elseif ($command == "and") {
+            //スタックから１つ目の変数を取り出しDレジスタに格納
+            $code = "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            $code .= "D=M"."\n";
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //スタックから２つ目の変数を取得
+            $code .= "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            //計算を実行
+            $code .= "D=M&D"."\n";  //D=x&y
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //スタックに計算結果を格納
+            $code .= "A=M"."\n";
+            $code .= "M=D"."\n";
+            //スタックポインタを+1
+            $code .= "@SP"."\n";
+            $code .= "M=M+1"."\n";
+            fputs($this->fp_output, $code);
+        } elseif ($command == "or") {
+            //スタックから１つ目の変数を取り出しDレジスタに格納
+            $code = "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            $code .= "D=M"."\n";
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //スタックから２つ目の変数を取得
+            $code .= "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            //計算を実行
+            $code .= "D=M|D"."\n";  //D=x|y
+            //スタックポインタを-1
+            $code .= "@SP"."\n";
+            $code .= "M=M-1"."\n";
+            //スタックに計算結果を格納
+            $code .= "A=M"."\n";
+            $code .= "M=D"."\n";
+            //スタックポインタを+1
+            $code .= "@SP"."\n";
+            $code .= "M=M+1"."\n";
+            fputs($this->fp_output, $code);
+        } elseif ($command == "not") {
+            //スタックから１つ目の変数を取り出しビット反転値を格納
+            $code = "@SP"."\n";
+            $code .= "A=M-1"."\n";
+            $code .= "M=!M"."\n";
+            fputs($this->fp_output, $code);
+        }
+
+        $this->labelNum++;
+    }
+
+    public function writePushPop($command, $segment, $index)
+    {
+        if ($command == "push") {
+            //メモリから値を取得
+            if ($segment == "constant") {
+                $code = "@".$index."\n";
+                $code .= "D=A"."\n";
+            } elseif ($segment == "local") {
+                $code = "@LCL"."\n";
+                $code .= "D=M"."\n";
+                $code .= "@".$index."\n";
+                $code .= "A=D+A"."\n";
+                $code .= "D=M"."\n";
+            } elseif ($segment == "argument") {
+                $code = "@ARG"."\n";
+                $code .= "D=M"."\n";
+                $code .= "@".$index."\n";
+                $code .= "A=D+A"."\n";
+                $code .= "D=M"."\n";
+            } elseif ($segment == "this") {
+                $code = "@THIS"."\n";
+                $code .= "D=M"."\n";
+                $code .= "@".$index."\n";
+                $code .= "A=D+A"."\n";
+                $code .= "D=M"."\n";
+            } elseif ($segment == "that") {
+                $code = "@THAT"."\n";
+                $code .= "D=M"."\n";
+                $code .= "@".$index."\n";
+                $code .= "A=D+A"."\n";
+                $code .= "D=M"."\n";
+            } elseif ($segment == "pointer") {
+                $code = "@3"."\n";
+                $code .= "D=A"."\n";
+                $code .= "@".$index."\n";
+                $code .= "A=D+A"."\n";
+                $code .= "D=M"."\n";
+            } elseif ($segment == "temp") {
+                $code = "@5"."\n";
+                $code .= "D=A"."\n";
+                $code .= "@".$index."\n";
+                $code .= "A=D+A"."\n";
+                $code .= "D=M"."\n";
+            } elseif ($segment == "static") {
+                $code = "@".$this->inputFilename.".".$index."\n";
+                $code .= "D=M"."\n";
+            }
+            //スタックにPUSH
+            $code .= "@SP"."\n";
+            $code .= "A=M"."\n";
+            $code .= "M=D"."\n";
+            //スタックポインタを+1
+            $code .= "@SP"."\n";
+            $code .= "M=M+1"."\n";
+            fputs($this->fp_output, $code);
+        } elseif ($command == "pop") {
+            //メモリから値を取得
+            if ($segment == "local") {
+                //スタックから１つ目の変数を取り出しDレジスタに格納
+                $code = "@SP"."\n";
+                $code .= "A=M-1"."\n";
+                $code .= "D=M"."\n";
+                //スタックポインタを-1
+                $code .= "@SP"."\n";
+                $code .= "M=M-1"."\n";
+                //Dレジスタの値をlocal[index]に格納
+                $code .= "@LCL"."\n";
+                $code .= "A=M"."\n";
+                for ($i = 0; $i < $index; $i++) {
+                    $code .= "A=A+1"."\n";
+                }
+                $code .= "M=D"."\n";
+            } elseif ($segment == "argument") {
+                //スタックから１つ目の変数を取り出しDレジスタに格納
+                $code = "@SP"."\n";
+                $code .= "A=M-1"."\n";
+                $code .= "D=M"."\n";
+                //スタックポインタを-1
+                $code .= "@SP"."\n";
+                $code .= "M=M-1"."\n";
+                //Dレジスタの値をargument[index]に格納
+                $code .= "@ARG"."\n";
+                $code .= "A=M"."\n";
+                for ($i = 0; $i < $index; $i++) {
+                    $code .= "A=A+1"."\n";
+                }
+                $code .= "M=D"."\n";
+            } elseif ($segment == "this") {
+                //スタックから１つ目の変数を取り出しDレジスタに格納
+                $code = "@SP"."\n";
+                $code .= "A=M-1"."\n";
+                $code .= "D=M"."\n";
+                //スタックポインタを-1
+                $code .= "@SP"."\n";
+                $code .= "M=M-1"."\n";
+                //Dレジスタの値をthis[index]に格納
+                $code .= "@THIS"."\n";
+                $code .= "A=M"."\n";
+                for ($i = 0; $i < $index; $i++) {
+                    $code .= "A=A+1"."\n";
+                }
+                $code .= "M=D"."\n";
+            } elseif ($segment == "that") {
+                //スタックから１つ目の変数を取り出しDレジスタに格納
+                $code = "@SP"."\n";
+                $code .= "A=M-1"."\n";
+                $code .= "D=M"."\n";
+                //スタックポインタを-1
+                $code .= "@SP"."\n";
+                $code .= "M=M-1"."\n";
+                //Dレジスタの値をthat[index]に格納
+                $code .= "@THAT"."\n";
+                $code .= "A=M"."\n";
+                for ($i = 0; $i < $index; $i++) {
+                    $code .= "A=A+1"."\n";
+                }
+                $code .= "M=D"."\n";
+            } elseif ($segment == "pointer") {
+                //スタックから１つ目の変数を取り出しDレジスタに格納
+                $code = "@SP"."\n";
+                $code .= "A=M-1"."\n";
+                $code .= "D=M"."\n";
+                //スタックポインタを-1
+                $code .= "@SP"."\n";
+                $code .= "M=M-1"."\n";
+                //Dレジスタの値をpointer[index]に格納
+                $code .= "@3"."\n";
+                for ($i = 0; $i < $index; $i++) {
+                    $code .= "A=A+1"."\n";
+                }
+                $code .= "M=D"."\n";
+            } elseif ($segment == "temp") {
+                //スタックから１つ目の変数を取り出しDレジスタに格納
+                $code = "@SP"."\n";
+                $code .= "A=M-1"."\n";
+                $code .= "D=M"."\n";
+                //スタックポインタを-1
+                $code .= "@SP"."\n";
+                $code .= "M=M-1"."\n";
+                //Dレジスタの値をtemp[index]に格納
+                $code .= "@5"."\n";
+                for ($i = 0; $i < $index; $i++) {
+                    $code .= "A=A+1"."\n";
+                }
+                $code .= "M=D"."\n";
+            } elseif ($segment == "static") {
+                //スタックから１つ目の変数を取り出しDレジスタに格納
+                $code = "@SP"."\n";
+                $code .= "A=M-1"."\n";
+                $code .= "D=M"."\n";
+                //スタックポインタを-1
+                $code .= "@SP"."\n";
+                $code .= "M=M-1"."\n";
+                //static[index]に格納
+                $code .= "@".$this->inputFilename.".".$index."\n";
+                $code .= "M=D"."\n";
+            }
+            fputs($this->fp_output, $code);
+        }
+    }
+
+    public function writeLabel($label)
+    {
+        $code = "(".$label.")\n";
+        fputs($this->fp_output, $code);
+    }
+
+    public function writeGoTo($label)
+    {
+        $code = "@".$label."\n";
+        $code .= "0;JMP"."\n";
+        fputs($this->fp_output, $code);
+    }
+    
+    public function writeIf($label)
+    {
+        //スタックの最上位の値をポップ
+        $code = "@SP"."\n";
+        $code .= "A=M-1"."\n";
+        $code .= "D=M"."\n";
+        //スタックポインタを-1
+        $code .= "@SP"."\n";
+        $code .= "M=M-1"."\n";
+        //0以外ならジャンプ
+        $code .= "@".$label."\n";
+        $code .= "D;JNE"."\n";
+        fputs($this->fp_output, $code);
+    }
+    
+    public function writeCall($functionName, $numArgs)
+    {
+        //リターンアドレスを格納
+        $code = "@RETURN_ADDRESS_".$functionName."_".$this->labelNum."\n";
+        $code .= "D=A"."\n";
+        $code .= "@SP"."\n";
+        $code .= "A=M"."\n";
+        $code .= "M=D"."\n";
+        //スタックポインタを+1
+        $code .= "@SP"."\n";
+        $code .= "M=M+1"."\n";
+        //関数呼び出し側のLCLを格納
+        $code .= "@LCL"."\n";
+        $code .= "D=M"."\n";
+        $code .= "@SP"."\n";
+        $code .= "A=M"."\n";
+        $code .= "M=D"."\n";
+        //スタックポインタを+1
+        $code .= "@SP"."\n";
+        $code .= "M=M+1"."\n";
+        //関数呼び出し側のARGを格納
+        $code .= "@ARG"."\n";
+        $code .= "D=M"."\n";
+        $code .= "@SP"."\n";
+        $code .= "A=M"."\n";
+        $code .= "M=D"."\n";
+        //スタックポインタを+1
+        $code .= "@SP"."\n";
+        $code .= "M=M+1"."\n";
+        //関数呼び出し側のTHISを格納
+        $code .= "@3"."\n"; //thisのアドレスを指すpointer
+        $code .= "D=M"."\n";
+        $code .= "@SP"."\n";
+        $code .= "A=M"."\n";
+        $code .= "M=D"."\n";
+        //スタックポインタを+1
+        $code .= "@SP"."\n";
+        $code .= "M=M+1"."\n";
+        //関数呼び出し側のTHATを格納
+        $code .= "@4"."\n"; //thatのアドレスを指すpointer
+        $code .= "D=M"."\n";
+        $code .= "@SP"."\n";
+        $code .= "A=M"."\n";
+        $code .= "M=D"."\n";
+        //スタックポインタを+1
+        $code .= "@SP"."\n";
+        $code .= "M=M+1"."\n";
+        //ARG = SP-n-5として別の場所に移す
+        $code .= "@SP"."\n";
+        $code .= "D=M"."\n";
+        $code .= "@ARG"."\n";
+        $code .= "M=D"."\n"; //*ARG=*SP
+        $code .= "@".$numArgs."\n";
+        $code .= "D=A"."\n";
+        $code .= "@ARG"."\n";
+        $code .= "M=M-D"."\n"; //*ARG=*ARG-n
+        $code .= "@5"."\n";
+        $code .= "D=A"."\n";
+        $code .= "@ARG"."\n";
+        $code .= "M=M-D"."\n"; //*ARG=*ARG-5
+        //LCL = SPとして別の場所に移す
+        $code .= "@SP"."\n";
+        $code .= "D=M"."\n";
+        $code .= "@LCL"."\n";
+        $code .= "M=D"."\n"; //*LCL=*SP
+        //制御を移す
+        $code .= "@".$functionName."\n";
+        $code .= "0;JMP"."\n";
+        //リターンアドレスのためのラベルを宣言
+        $code .= "(RETURN_ADDRESS_".$functionName."_".$this->labelNum.")\n";
+        fputs($this->fp_output, $code);
+        $this->labelNum++;
+    }
+        
+    public function writeReturn()
+    {
+        //FRAMEにLCLの値を格納
+        $code = "@LCL"."\n";
+        $code .= "D=M"."\n";
+        $code .= "@FRAME".$this->labelNum."\n";
+        $code .= "M=D"."\n";  //*FRAME=*LCL
+        //リターンアドレスを取得(RET=*(FRAME-5))
+        $code .= "@FRAME".$this->labelNum."\n";
+        $code .= "D=M"."\n";
+        $code .= "@5"."\n";
+        $code .= "A=D-A"."\n";
+        $code .= "D=M"."\n"; //*(FRAME-5)
+        $code .= "@RET".$this->labelNum."\n";
+        $code .= "M=D"."\n";
+        //関数の呼び出し側のために関数の戻り値を別の場所に戻す(*ARG=pop())
+        $code .= "@SP"."\n";
+        $code .= "M=M-1"."\n";
+        $code .= "A=M"."\n";
+        $code .= "D=M"."\n";
+        $code .= "@ARG"."\n";
+        $code .= "A=M"."\n";
+        $code .= "M=D"."\n";
+        //呼び出し側のSPを戻す(SP=ARG+1)
+        $code .= "@ARG"."\n";
+        $code .= "D=M+1"."\n";
+        $code .= "@SP"."\n";
+        $code .= "M=D"."\n";
+        //呼び出し側のTHATを戻す(THAT=*(FRAME-1))
+        $code .= "@FRAME".$this->labelNum."\n";
+        $code .= "D=M"."\n";
+        $code .= "@1"."\n";
+        $code .= "A=D-A"."\n";
+        $code .= "D=M"."\n"; //*(FRAME-1)
+        $code .= "@4"."\n"; //THATのベースアドレス
+        $code .= "M=D"."\n";
+        //呼び出し側のTHISを戻す(THIS=*(FRAME-2))
+        $code .= "@FRAME".$this->labelNum."\n";
+        $code .= "D=M"."\n";
+        $code .= "@2"."\n";
+        $code .= "A=D-A"."\n";
+        $code .= "D=M"."\n"; //*(FRAME-2)
+        $code .= "@3"."\n"; //THISのベースアドレス
+        $code .= "M=D"."\n";
+        //呼び出し側のARGを戻す(ARG=*(FRAME-3))
+        $code .= "@FRAME".$this->labelNum."\n";
+        $code .= "D=M"."\n";
+        $code .= "@3"."\n";
+        $code .= "A=D-A"."\n";
+        $code .= "D=M"."\n"; //*(FRAME-3)
+        $code .= "@ARG"."\n";
+        $code .= "M=D"."\n";
+        //呼び出し側のLCLを戻す(LCL=*(FRAME-4))
+        $code .= "@FRAME".$this->labelNum."\n";
+        $code .= "D=M"."\n";
+        $code .= "@4"."\n";
+        $code .= "A=D-A"."\n";
+        $code .= "D=M"."\n"; //*(FRAME-4)
+        $code .= "@LCL"."\n";
+        $code .= "M=D"."\n";
+        //リターンアドレスへ移動する
+        $code .= "@RET".$this->labelNum."\n";
+        $code .= "A=M"."\n";
+        $code .= "0;JMP"."\n";
+        fputs($this->fp_output, $code);
+        $this->labelNum++;
+    }
+
+    public function writeFunction($functionName, $numLocals)
+    {
+        //関数の開始位置のためのラベルを宣言
+        $code = "(".$functionName.")\n";
+        //ローカル変数の個数分を0で初期化
+        for ($i=0; $i < $numLocals; $i++) {
+            $code .= "@SP"."\n";
+            $code .= "A=M"."\n";
+            $code .= "M=0"."\n";
+            //スタックポインタを+1
+            $code .= "@SP"."\n";
+            $code .= "M=M+1"."\n";
+        }
+        fputs($this->fp_output, $code);
+    }
+}
+
+function VMtranslate($outputFilename, $inputFilename, $codeWriter)
+{
+    //読み込みファイルを開く（'r'は読み込みモードで開く）
+    file_exists($inputFilename) && ($fp_input=fopen($inputFilename, "r")) || die("読み込みに失敗\n");
+
+    //Parserコンストラクタ
+    $parser = new Parser();
+
+    //メインの処理
+    $rowNum = 0;
+    while ($parser->hasMoreCommands($fp_input)) {
+        //次のコマンドを読み込み
+        $parser->advance($fp_input);
+
+        //アセンブリコードに変換し書き込み
+        if ($parser->commandType() == "C_ARITHMETIC") {
+            $codeWriter->writeArithmetic($parser->arg1());
+        } elseif ($parser->commandType() == "C_PUSH") {
+            if ($parser->arg1() == "static") {
+                $codeWriter->writePushPop("push", $parser->arg1(), $parser->arg2());
+            } else {
+                $codeWriter->writePushPop("push", $parser->arg1(), $parser->arg2());
+            }
+        } elseif ($parser->commandType() == "C_POP") {
+            $codeWriter->writePushPop("pop", $parser->arg1(), $parser->arg2());
+        } elseif ($parser->commandType() == "C_LABEL") {
+            $codeWriter->writeLabel($parser->arg1());
+        } elseif ($parser->commandType() == "C_GOTO") {
+            $codeWriter->writeGoTo($parser->arg1());
+        } elseif ($parser->commandType() == "C_IF") {
+            $codeWriter->writeIf($parser->arg1());
+        } elseif ($parser->commandType() == "C_CALL") {
+            $codeWriter->writeCall($parser->arg1(), $parser->arg2());
+        } elseif ($parser->commandType() == "C_RETURN") {
+            $codeWriter->writeReturn();
+        } elseif ($parser->commandType() == "C_FUNCTION") {
+            $codeWriter->writeFunction($parser->arg1(), $parser->arg2());
+        }
+    }
+
+    //ファイルを閉じる
+    fclose($fp_input);
+}
+
+//コマンドラインからファイル名を取得し変数に格納
+if ($argc != 2) {
+    echo "不正な引数です\n";
+    return;
+}
+$fileOrDirName = $argv[1];
+
+if (is_dir($fileOrDirName)) {
+    //CodeWriterコンストラクタ
+    //書き込みファイル名とファイルポインタをセット
+    $codeWriter = new CodeWriter($fileOrDirName);
+    $codeWriter->writeInit();
+    
+    //ディレクトリの場合
+    foreach (glob($fileOrDirName.'/{*.vm}', GLOB_BRACE) as $inputFilename) {
+        if (is_file($inputFilename)) {
+            //static変数に使うプロパティのファイル名をセット
+            $codeWriter->setFileName($inputFilename);
+            VMtranslate($fileOrDirName, $inputFilename, $codeWriter);
+        }
+    }
+    $codeWriter->close();
+} else {
+    //ファイルの場合
+    //読み込みファイル名
+    $inputFilename = $fileOrDirName;
+    //書き込みファイル名
+    preg_match("/(\S*?)\./", $inputFilename, $match);
+    $outputFilename = $match[1];
+
+    //CodeWriterコンストラクタ
+    //書き込みファイル名とファイルポインタをセット
+    $codeWriter = new CodeWriter($outputFilename);
+    //static変数に使うプロパティのファイル名をセット
+    $codeWriter->setFileName($inputFilename);
+    $codeWriter->writeInit();
+
+    VMtranslate($outputFilename, $inputFilename, $codeWriter);
+
+    $codeWriter->close();
+}

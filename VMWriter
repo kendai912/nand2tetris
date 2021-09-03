@@ -1,0 +1,134 @@
+<?php
+
+class VMWriter
+{
+    public $fp_compilationOutput;
+    
+    public function __construct($fp_compilationOutput)
+    {
+        $this->fp_compilationOutput = $fp_compilationOutput;
+    }
+
+    public function writePush($segment, $index)
+    {
+        if ($segment == "const") {
+            fputs($this->fp_compilationOutput, "push constant ".$index."\n");
+        }
+        if ($segment == "temp") {
+            fputs($this->fp_compilationOutput, "push temp ".$index."\n");
+        }
+        if ($segment == "var") {
+            fputs($this->fp_compilationOutput, "push local ".$index."\n");
+        }
+        if ($segment == "arg") {
+            fputs($this->fp_compilationOutput, "push argument ".$index."\n");
+        }
+        if ($segment == "pointer") {
+            fputs($this->fp_compilationOutput, "push pointer ".$index."\n");
+        }
+        if ($segment == "field") {
+            fputs($this->fp_compilationOutput, "push this ".$index."\n");
+        }
+        if ($segment == "that") {
+            fputs($this->fp_compilationOutput, "push that ".$index."\n");
+        }
+        if ($segment == "this") {
+            fputs($this->fp_compilationOutput, "push this ".$index."\n");
+        }
+        if ($segment == "static") {
+            fputs($this->fp_compilationOutput, "push static ".$index."\n");
+        }
+    }
+
+    public function writePop($segment, $index)
+    {
+        if ($segment == "const") {
+            fputs($this->fp_compilationOutput, "pop constant ".$index."\n");
+        }
+        if ($segment == "temp") {
+            fputs($this->fp_compilationOutput, "pop temp ".$index."\n");
+        }
+        if ($segment == "var") {
+            fputs($this->fp_compilationOutput, "pop local ".$index."\n");
+        }
+        if ($segment == "arg") {
+            fputs($this->fp_compilationOutput, "pop argument ".$index."\n");
+        }
+        if ($segment == "pointer") {
+            fputs($this->fp_compilationOutput, "pop pointer ".$index."\n");
+        }
+        if ($segment == "field") {
+            fputs($this->fp_compilationOutput, "pop this ".$index."\n");
+        }
+        if ($segment == "that") {
+            fputs($this->fp_compilationOutput, "pop that ".$index."\n");
+        }
+        if ($segment == "this") {
+            fputs($this->fp_compilationOutput, "pop this ".$index."\n");
+        }
+        if ($segment == "static") {
+            fputs($this->fp_compilationOutput, "pop static ".$index."\n");
+        }
+    }
+
+    public function writeFunction($name, $nLocals)
+    {
+        fputs($this->fp_compilationOutput, "function ".$name." ".$nLocals."\n");
+    }
+    
+    public function writeArithmetic($command)
+    {
+        if ($command == "add") {
+            fputs($this->fp_compilationOutput, "add"."\n");
+        }
+        if ($command == "neg") {
+            fputs($this->fp_compilationOutput, "neg"."\n");
+        }
+        if ($command == "not") {
+            fputs($this->fp_compilationOutput, "not"."\n");
+        }
+        if ($command == "lt") {
+            fputs($this->fp_compilationOutput, "lt"."\n");
+        }
+        if ($command == "gt") {
+            fputs($this->fp_compilationOutput, "gt"."\n");
+        }
+        if ($command == "and") {
+            fputs($this->fp_compilationOutput, "and"."\n");
+        }
+        if ($command == "or") {
+            fputs($this->fp_compilationOutput, "or"."\n");
+        }
+        if ($command == "eq") {
+            fputs($this->fp_compilationOutput, "eq"."\n");
+        }
+        if ($command == "sub") {
+            fputs($this->fp_compilationOutput, "sub"."\n");
+        }
+    }
+
+    public function writeCall($name, $nArgs)
+    {
+        fputs($this->fp_compilationOutput, "call ".$name." ".$nArgs."\n");
+    }
+    
+    public function writeReturn()
+    {
+        fputs($this->fp_compilationOutput, "return"."\n");
+    }
+    
+    public function writeLabel($label)
+    {
+        fputs($this->fp_compilationOutput, "label ".$label."\n");
+    }
+    
+    public function writeIf($label)
+    {
+        fputs($this->fp_compilationOutput, "if-goto ".$label."\n");
+    }
+    
+    public function writeGoto($label)
+    {
+        fputs($this->fp_compilationOutput, "goto ".$label."\n");
+    }
+}

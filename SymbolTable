@@ -1,0 +1,156 @@
+<?php
+
+class SymbolTable
+{
+    public $classSymbolTable;
+    public $subroutineSymbolTable;
+    
+    public function __construct()
+    {
+        $this->classSymbolTable = array(array(array()));
+    }
+
+    public function startSubroutine()
+    {
+        $this->subroutineSymbolTable = array(array(array()));
+    }
+
+    public function define($name, $type, $kind)
+    {
+        if ($kind == "static") {
+            $this->classSymbolTable['static'][] = [
+                'name' => $name,
+                'type' => $type,
+            ];
+        }
+
+        if ($kind == "field") {
+            $this->classSymbolTable['field'][] = [
+                'name' => $name,
+                'type' => $type,
+            ];
+        }
+
+        if ($kind == "arg") {
+            $this->subroutineSymbolTable['arg'][] = [
+                'name' => $name,
+                'type' => $type,
+            ];
+        }
+
+        if ($kind == "var") {
+            $this->subroutineSymbolTable['var'][] = [
+                'name' => $name,
+                'type' => $type,
+            ];
+        }
+    }
+
+    public function varCount($kind)
+    {
+        if ($kind == "static") {
+            if (isset($this->classSymbolTable['static'])) {
+                return count($this->classSymbolTable['static']);
+            } else {
+                return 0;
+            }
+        }
+
+        if ($kind == "field") {
+            if (isset($this->classSymbolTable['field'])) {
+                return count($this->classSymbolTable['field']);
+            } else {
+                return 0;
+            }
+        }
+          
+        if ($kind == "arg") {
+            if (isset($this->subroutineSymbolTable['arg'])) {
+                return count($this->subroutineSymbolTable['arg']);
+            } else {
+                return 0;
+            }
+        }
+
+        if ($kind == "var") {
+            if (isset($this->subroutineSymbolTable['var'])) {
+                return count($this->subroutineSymbolTable['var']);
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    public function kindOf($name)
+    {
+        for ($i = 0; $i < $this->varCount("var"); $i++) {
+            if ($this->subroutineSymbolTable['var'][$i]['name'] == $name) {
+                return 'var';
+            }
+        }
+        for ($i = 0; $i < $this->varCount("arg"); $i++) {
+            if ($this->subroutineSymbolTable['arg'][$i]['name'] == $name) {
+                return 'arg';
+            }
+        }
+        for ($i = 0; $i < $this->varCount("field"); $i++) {
+            if ($this->classSymbolTable['field'][$i]['name'] == $name) {
+                return 'field';
+            }
+        }
+        for ($i = 0; $i < $this->varCount("static"); $i++) {
+            if ($this->classSymbolTable['static'][$i]['name'] == $name) {
+                return 'static';
+            }
+        }
+        return 'NONE';
+    }
+
+    public function typeOf($name)
+    {
+        for ($i = 0; $i < $this->varCount("var"); $i++) {
+            if ($this->subroutineSymbolTable['var'][$i]['name'] == $name) {
+                return $this->subroutineSymbolTable['var'][$i]['type'];
+            }
+        }
+        for ($i = 0; $i < $this->varCount("arg"); $i++) {
+            if ($this->subroutineSymbolTable['arg'][$i]['name'] == $name) {
+                return $this->subroutineSymbolTable['arg'][$i]['type'];
+            }
+        }
+        for ($i = 0; $i < $this->varCount("field"); $i++) {
+            if ($this->classSymbolTable['field'][$i]['name'] == $name) {
+                return $this->classSymbolTable['field'][$i]['type'];
+            }
+        }
+        for ($i = 0; $i < $this->varCount("static"); $i++) {
+            if ($this->classSymbolTable['static'][$i]['name'] == $name) {
+                return $this->classSymbolTable['field'][$i]['type'];
+            }
+        }
+    }
+
+    public function indexOf($name)
+    {
+        for ($i = 0; $i < $this->varCount("var"); $i++) {
+            if ($this->subroutineSymbolTable['var'][$i]['name'] == $name) {
+                return $i;
+            }
+        }
+        for ($i = 0; $i < $this->varCount("arg"); $i++) {
+            if ($this->subroutineSymbolTable['arg'][$i]['name'] == $name) {
+                return $i;
+            }
+        }
+        for ($i = 0; $i < $this->varCount("field"); $i++) {
+            if ($this->classSymbolTable['field'][$i]['name'] == $name) {
+                return $i;
+            }
+        }
+        for ($i = 0; $i < $this->varCount("static"); $i++) {
+            if ($this->classSymbolTable['static'][$i]['name'] == $name) {
+                return $i;
+            }
+        }
+    }
+}
